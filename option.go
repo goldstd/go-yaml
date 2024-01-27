@@ -10,6 +10,13 @@ import (
 // DecodeOption functional option type for Decoder
 type DecodeOption func(d *Decoder) error
 
+func WithKeyMatchMode(mode KeyMatchMode) DecodeOption {
+	return func(d *Decoder) error {
+		d.keyMatchMode = mode
+		return nil
+	}
+}
+
 // ReferenceReaders pass to Decoder that reference to anchor defined by passed readers
 func ReferenceReaders(readers ...io.Reader) DecodeOption {
 	return func(d *Decoder) error {
