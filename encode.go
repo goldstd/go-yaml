@@ -41,6 +41,7 @@ type Encoder struct {
 	useLiteralStyleIfMultiline bool
 	commentMap                 map[*Path][]*Comment
 	written                    bool
+	keyMatchMode               KeyMatchMode
 
 	line        int
 	column      int
@@ -745,7 +746,7 @@ func (e *Encoder) encodeAnchor(anchorName string, value ast.Node, fieldValue ref
 func (e *Encoder) encodeStruct(ctx context.Context, value reflect.Value, column int) (ast.Node, error) {
 	node := ast.Mapping(token.New("", "", e.pos(column)), e.isFlowStyle)
 	structType := value.Type()
-	structFieldMap, err := structFieldMap(structType, KeyMatchLowercase)
+	structFieldMap, err := structFieldMap(structType, e.keyMatchMode)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get struct field map")
 	}
