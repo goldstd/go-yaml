@@ -81,6 +81,16 @@ func TestEncoder(t *testing.T) {
 			nil,
 		},
 		{
+			"v: 1e-06\n",
+			map[string]float32{"v": 1e-06},
+			nil,
+		},
+		{
+			"v: 1e-06\n",
+			map[string]float64{"v": 0.000001},
+			nil,
+		},
+		{
 			"v: 0.123456789\n",
 			map[string]float64{"v": 0.123456789},
 			nil,
@@ -98,6 +108,16 @@ func TestEncoder(t *testing.T) {
 		{
 			"v: 1e+06\n",
 			map[string]float64{"v": 1000000},
+			nil,
+		},
+		{
+			"v: 1e-06\n",
+			map[string]float64{"v": 0.000001},
+			nil,
+		},
+		{
+			"v: 1e-06\n",
+			map[string]float64{"v": 1e-06},
 			nil,
 		},
 		{
@@ -316,6 +336,11 @@ func TestEncoder(t *testing.T) {
 		{
 			"a: \" b \"\n",
 			map[string]string{"a": " b "},
+			nil,
+		},
+		{
+			"a: \"`b` c\"\n",
+			map[string]string{"a": "`b` c"},
 			nil,
 		},
 		{

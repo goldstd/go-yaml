@@ -14,11 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/xerrors"
+
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/internal/errors"
 	"github.com/goccy/go-yaml/parser"
-	"golang.org/x/xerrors"
 )
 
 type Child struct {
@@ -252,6 +253,10 @@ func TestDecoder(t *testing.T) {
 			"v: 4294967295",
 			map[string]uint{"v": math.MaxUint32},
 		},
+		{
+			"v: 1e3",
+			map[string]uint{"v": 1000},
+		},
 
 		// uint64
 		{
@@ -269,6 +274,10 @@ func TestDecoder(t *testing.T) {
 		{
 			"v: 9223372036854775807",
 			map[string]uint64{"v": math.MaxInt64},
+		},
+		{
+			"v: 1e3",
+			map[string]uint64{"v": 1000},
 		},
 
 		// float32
@@ -288,6 +297,10 @@ func TestDecoder(t *testing.T) {
 			"v: 18446744073709551616",
 			map[string]float32{"v": float32(math.MaxUint64 + 1)},
 		},
+		{
+			"v: 1e-06",
+			map[string]float32{"v": 1e-6},
+		},
 
 		// float64
 		{
@@ -305,6 +318,10 @@ func TestDecoder(t *testing.T) {
 		{
 			"v: 18446744073709551616",
 			map[string]float64{"v": float64(math.MaxUint64 + 1)},
+		},
+		{
+			"v: 1e-06",
+			map[string]float64{"v": 1e-06},
 		},
 
 		// Timestamps
@@ -1092,6 +1109,73 @@ c:
 	}
 }
 
+func TestDecoder_ScientificNotation(t *testing.T) {
+	tests := []struct {
+		source string
+		value  interface{}
+	}{
+		{
+			"v: 1e3",
+			map[string]uint{"v": 1000},
+		},
+		{
+			"v: 1e-3",
+			map[string]uint{"v": 0},
+		},
+		{
+			"v: 1e3",
+			map[string]int{"v": 1000},
+		},
+		{
+			"v: 1e-3",
+			map[string]int{"v": 0},
+		},
+		{
+			"v: 1e3",
+			map[string]float32{"v": 1000},
+		},
+		{
+			"v: 1.0e3",
+			map[string]float64{"v": 1000},
+		},
+		{
+			"v: 1e-3",
+			map[string]float64{"v": 0.001},
+		},
+		{
+			"v: 1.0e-3",
+			map[string]float64{"v": 0.001},
+		},
+		{
+			"v: 1.0e+3",
+			map[string]float64{"v": 1000},
+		},
+		{
+			"v: 1.0e+3",
+			map[string]float64{"v": 1000},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.source, func(t *testing.T) {
+			buf := bytes.NewBufferString(test.source)
+			dec := yaml.NewDecoder(buf)
+			typ := reflect.ValueOf(test.value).Type()
+			value := reflect.New(typ)
+			if err := dec.Decode(value.Interface()); err != nil {
+				if err == io.EOF {
+					return
+				}
+				t.Fatalf("%s: %+v", test.source, err)
+			}
+			actual := fmt.Sprintf("%+v", value.Elem().Interface())
+			expect := fmt.Sprintf("%+v", test.value)
+			if actual != expect {
+				t.Fatalf("failed to test [%s], actual=[%s], expect=[%s]", test.source, actual, expect)
+			}
+		})
+	}
+}
+
 func TestDecoder_TypeConversionError(t *testing.T) {
 	t.Run("type conversion for struct", func(t *testing.T) {
 		type T struct {
@@ -1110,6 +1194,17 @@ func TestDecoder_TypeConversionError(t *testing.T) {
 				t.Fatal("expected to error")
 			}
 			msg := "cannot unmarshal string into Go struct field T.A of type int"
+			if !strings.Contains(err.Error(), msg) {
+				t.Fatalf("expected error message: %s to contain: %s", err.Error(), msg)
+			}
+		})
+		t.Run("string to uint", func(t *testing.T) {
+			var v T
+			err := yaml.Unmarshal([]byte(`b: str`), &v)
+			if err == nil {
+				t.Fatal("expected to error")
+			}
+			msg := "cannot unmarshal string into Go struct field T.B of type uint"
 			if !strings.Contains(err.Error(), msg) {
 				t.Fatalf("expected error message: %s to contain: %s", err.Error(), msg)
 			}
@@ -2904,5 +2999,31 @@ func TestSameNameInineStruct(t *testing.T) {
 	}
 	if fmt.Sprint(v.X.X) != "0.7" {
 		t.Fatalf("failed to decode")
+	}
+}
+
+type unmarshableMapKey struct {
+	Key string
+}
+
+func (mk *unmarshableMapKey) UnmarshalYAML(b []byte) error {
+	mk.Key = string(b)
+	return nil
+}
+
+func TestMapKeyCustomUnmarshaler(t *testing.T) {
+	var m map[unmarshableMapKey]string
+	if err := yaml.Unmarshal([]byte(`key: value`), &m); err != nil {
+		t.Fatalf("failed to unmarshal %v", err)
+	}
+	if len(m) != 1 {
+		t.Fatalf("expected 1 element in map, but got %d", len(m))
+	}
+	val, ok := m[unmarshableMapKey{Key: "key"}]
+	if !ok {
+		t.Fatal("expected to have element 'key' in map")
+	}
+	if val != "value" {
+		t.Fatalf("expected to have value \"value\", but got %q", val)
 	}
 }
